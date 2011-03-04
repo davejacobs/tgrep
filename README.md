@@ -1,5 +1,5 @@
-tgrep.clj
-by David Jacobs
+Background
+==========
 
 Tgrep is a commandline utility meant to search log files per Reddit's specifications [0].
 
