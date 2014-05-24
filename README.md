@@ -49,5 +49,5 @@ must load before the script can execute. A persistent JVM can solves
 this problem. To give you an indication of the actual run time of my
 script, I've included an "Elapsed time" tag after the script runs.
 
-For an evenly distributed ~4 GB file, on a MacBook air, this code takes
+For an evenly distributed ~4 GB file, on a MacBook Air, this code takes
 about 150 ms to find 60 lines.
