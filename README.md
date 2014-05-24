@@ -19,7 +19,8 @@ To run:
 
 ### Edge cases ###
 
-There were several different potential edge cases and bugs that could've cropped up with this utility. These are mainly the product of:
+There are several different potential edge cases that came up
+parsing logs. These are mainly the product of:
 
 1. The required flexibility of the input value precision (the user can
    supply times of arbitrary precision to the program, and the
@@ -47,3 +48,6 @@ the more you run it. One drawback about using the JVM is that the VM
 must load before the script can execute. A persistent JVM can solves
 this problem. To give you an indication of the actual run time of my
 script, I've included an "Elapsed time" tag after the script runs.
+
+For an evenly distributed ~4 GB file, on a MacBook air, this code takes
+about 150 ms to find 60 lines.
