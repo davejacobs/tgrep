@@ -1,9 +1,20 @@
 (ns tgrep.generate
-  (:require [tgrep.search :as ts])
-  (:use clojure.contrib.string
-        clojure.contrib.duck-streams
-        clj-time.core
-        clj-time.coerce))
+  (:require [tgrep.search :as ts]
+            [clojure.string :as string]
+            [clj-time.core :as clj-time]
+            [clj-time.coerce :as coerce]
+            [clojure.java.io :refer [writer]])
+  (:import java.io.BufferedWriter))
+
+;; Copied from old clojure-contrib
+(defn write-lines
+  "Writes lines (a seq) to f, separated by newlines. f is opened with
+   writer, and automatically closed at the end of the sequence."
+  [filename lines]
+  (with-open [w (writer filename)]
+    (binding [*out* w]
+      (doseq [line lines]
+        (println line)))))
 
 (def start-time (ts/parse-date "11/Feb/2011:23:55:00.000" ts/date-formatter-1))
 
@@ -12,11 +23,11 @@
 (defn entry-for
   "Generates an entry for the given date (in millis) based on template."
   [template millis]
-  (let [date (from-long millis)
+  (let [date (coerce/from-long millis)
         formatted-1 (ts/unparse-date date ts/date-formatter-1)
         formatted-2 (ts/unparse-date date ts/date-formatter-2)
-        subst-1 (replace-first-re ts/date-re-1 formatted-1 template)
-        subst-2 (replace-first-re ts/date-re-2 formatted-2 subst-1)]
+        subst-1 (string/replace-first template ts/date-re-1 formatted-1)
+        subst-2 (string/replace-first subst-1 ts/date-re-2 formatted-2)]
     subst-2))
 
 (defn next-entry
@@ -26,17 +37,16 @@
    (let [next-date (ts/inc-date (ts/get-date curr-entry) millis)
          formatted-1 (ts/unparse-date next-date ts/date-formatter-1)
          formatted-2 (ts/unparse-date next-date ts/date-formatter-2)
-         subst-1 (replace-first-re ts/date-re-1 formatted-1 curr-entry)
-         subst-2 (replace-first-re ts/date-re-2 formatted-2 subst-1)]
+         subst-1 (string/replace-first curr-entry ts/date-re-1 formatted-1)
+         subst-2 (string/replace-first subst-1 ts/date-re-2 formatted-2)]
      subst-2)))
 
-(defn write-entries
+(defn create-file!
   "Writes all entries to logfile via lazy map, to avoid heavy memory
-  footprint but still harness the power of functional programming."
-  [start-date n]
-  (let [millis (to-long start-date)
+   footprint but still harness the power of functional programming."
+  [filename start-date n]
+  (let [millis (coerce/to-long start-date)
         entry (entry-for example millis)]
-    (write-lines ts/*logfile* (map #(next-entry entry (* 1000 %)) 
-                           (range 0 n)))))
-
-(defn -main [] (write-entries start-time 1000000))
+    (write-lines filename 
+                 (map #(next-entry entry (* 1000 %)) 
+                      (range 0 n)))))

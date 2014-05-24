@@ -1,42 +1,41 @@
 (ns tgrep.search
-  (:require [clj-time.format :only (formatter)])
-  (:use [clojure.contrib.string :only (join split)]
-        [clj-time.core :exclude (extend)]
-        clj-time.coerce)
+  (:require [clj-time.format :refer [formatter] :as format]
+            [clj-time.core :as clj-time]
+            [clj-time.coerce :as coerce]
+            [clojure.string :as string])
   (:import java.io.RandomAccessFile))
 
 ; Defaults/parameters
-(def *logfile* "/logs/haproxy.log")
-(def *encoding* "ASCII")
-(def *linefeed* "\n")
-(def *line-re*
-  (re-pattern (str *linefeed* "([^" *linefeed* "]+)" *linefeed*)))
-(def *entry-len* 300) ; Default expected entry length
+(def encoding "ASCII")
+(def linefeed "\n")
+(def line-re
+  (re-pattern (str linefeed "([^" linefeed "]+)" linefeed)))
+(def entry-len 300) ; Default expected entry length
 
 ; Date formats and matchers
 ; Fully qualified format
 (def date-formatter-1 
-  (clj-time.format/formatter "dd/MMM/yyyy:HH:mm:ss.SSS"))
+  (format/formatter "dd/MMM/yyyy:HH:mm:ss.SSS"))
 
-; Qualified format witHout year
+; Qualified format without year
 (def date-formatter-2
-  (clj-time.format/formatter "MMM dd HH:mm:ss"))
+  (format/formatter "MMM dd HH:mm:ss"))
 
-; Qualified format witH year
+; Qualified format with year
 (def date-formatter-3
-  (clj-time.format/formatter "MMM dd yyyy HH:mm:ss"))
+  (format/formatter "MMM dd yyyy HH:mm:ss"))
 
 ; Date mask with year
 (def date-formatter-4
-  (clj-time.format/formatter "MMM dd yyyy"))
+  (format/formatter "MMM dd yyyy"))
 
-; Date mask witHout year
+; Date mask without year
 (def date-formatter-5
-  (clj-time.format/formatter "MMM dd"))
+  (format/formatter "MMM dd"))
 
-; Time mask witHout milliseconds
+; Time mask without milliseconds
 (def date-formatter-6
-  (clj-time.format/formatter "HH:mm:ss"))
+  (format/formatter "HH:mm:ss"))
 
 ; Fully qualified regular expression
 (def date-re-1 #"\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2}\.\d{3}")
@@ -47,11 +46,11 @@
 ; Date manipulators
 (defn parse-date
   "Parses time from string according to date formatter"
-  [string formatter] (clj-time.format/parse formatter string))
+  [string formatter] (format/parse formatter string))
   
 (defn unparse-date
   "Emits date according to date formatter"
-  [date formatter] (clj-time.format/unparse formatter date))
+  [date formatter] (format/unparse formatter date))
 
 (defn get-date
   "Matches date according to re, returning a parseable substring 
@@ -65,12 +64,13 @@
 (defn inc-date
   "Create date that is x milliseconds past this date"
   ([date] (inc-date date 1))
-  ([date millis] (.plusMillis date millis)))
+  ([date millis] 
+   (.plusMillis date millis)))
 
 ; Predicates for file search functions
 (defn- line? 
   "Does s contain a full line?"
-  [s] (re-find *line-re* s))
+  [s] (re-find line-re s))
 
 (defn- not-line?
   "Does s not contain a full line?"
@@ -81,10 +81,10 @@
   current is not parseable, will also return true."
   [interval current]
   (let [match (re-find date-re-2 current)
-        start (start interval)]
+        start (clj-time/start interval)]
     (if-not match
       true
-      (or (after? (get-date match) start)
+      (or (clj-time/after? (get-date match) start)
           (.equals start (get-date match))))))
 
 (defn- not-after?
@@ -92,26 +92,26 @@
   current is not parseable, will also return true."
   [interval current]
   (let [match (re-find date-re-2 current)
-        end (end interval)]
+        end (clj-time/end interval)]
     (if-not match
       true
-      (or (before? (get-date match) end)
+      (or (clj-time/before? (get-date match) end)
           (.equals end (get-date match))))))
 
 ; Line parser
 (defn get-line 
   "Gets the first full line in s."
-  [s] (second (re-find *line-re* s)))
+  [s] (second (re-find line-re s)))
 
 ; File search tools
  
 (defn file-contents-at
   "Quick random access lookup of file contents from start to start + len."
   [file start]
-  (let [b (byte-array *entry-len*)]
+  (let [b (byte-array entry-len)]
     (.seek file start)
     (.read file b)
-    (String. b *encoding*)))
+    (String. b encoding)))
 
 (defn file-seek-backwards-while
   "Seeks backwards as long as the predicate is met. Will return the
@@ -119,7 +119,7 @@
   first one where the predicate is not met. This allows
   for finding the beginning of lines."
   ([file start predicate] 
-   (file-seek-backwards-while file start predicate *entry-len*))
+   (file-seek-backwards-while file start predicate entry-len))
   ([file start predicate buffer-len]
    (def b (byte-array buffer-len))
    (loop [position start
@@ -151,12 +151,12 @@
   requirements."
   [file start predicate]
   (.seek file start)
-  (loop [position (- start *entry-len*)
+  (loop [position (- start entry-len)
          aggregate ""]
     (let [safe-position (if (neg? position) 0 position)
           line (file-seek-backwards-while file safe-position not-line?)
           match (get-line line)
-          next-pos (- safe-position *entry-len*)]
+          next-pos (- safe-position entry-len)]
       (if-not (predicate match)
         aggregate
         (recur next-pos (str match "\n" aggregate))))))
@@ -178,8 +178,8 @@
   found date, we should look higher or lower"
   [target date lower upper]
   ;(println "finding correct bound for" target date lower upper)
-  (cond (after? target date) upper
-        (before? target date) lower
+  (cond (clj-time/after? target date) upper
+        (clj-time/before? target date) lower
         :else nil))
 
 (defn find-time-index
@@ -202,14 +202,14 @@
   "Returns all lines (as a sequence) whose dates fall inside of
   interval."
   [file interval]
-  (let [init (find-time-index file (start interval))
+  (let [init (find-time-index file (clj-time/start interval))
         first-pred #(not-before? interval %)
         first-segment (file-prev-lines-while file init first-pred) 
         middle-segment (file-line-around file init)
         last-pred #(not-after? interval %)
         last-segment (file-next-lines-while file init last-pred)
         full-segment (str first-segment middle-segment last-segment)
-        lines (split #"\n" full-segment)]
+        lines (string/split full-segment #"\n")]
     lines))
 
 ; Normalizing functions
@@ -220,7 +220,7 @@
   (let [date-mask date-formatter-4
         combined-mask date-formatter-3
         date-string (unparse-date date date-mask)
-        combined (join " " [date-string time-string])
+        combined (string/join " " [date-string time-string])
         parsed (parse-date combined combined-mask)]
     parsed))
 
@@ -233,39 +233,39 @@
   will return the interval encompassing both times within their
   own date context."
   ([date time-string]
-   (let [[h m s] (split #":" time-string)
+   (let [[h m s] (string/split time-string #":")
          lower-h (or h "00")
          lower-m (or m "00")
          lower-s (or s "00")
          higher-h (or h "23")
          higher-m (or m "59")
          higher-s (or s "59")
-         lower (join ":" [lower-h lower-m lower-s])
-         higher (join ":" [higher-h higher-m higher-s])]
-     (interval (combine-date-time date lower)
+         lower (string/join ":" [lower-h lower-m lower-s])
+         higher (string/join ":" [higher-h higher-m higher-s])]
+     (clj-time/interval (combine-date-time date lower)
                (combine-date-time date higher))))
   ([date-1 time-string-1 date-2 time-string-2]
    (let [interval-1 (intervalize date-1 time-string-1)
          interval-2 (intervalize date-2 time-string-2)
-         time-1 (start interval-1)
-         time-2 (end interval-2)]
-     (interval time-1 time-2))))
+         time-1 (clj-time/start interval-1)
+         time-2 (clj-time/end interval-2)]
+     (clj-time/interval time-1 time-2))))
 
 (defn within-interval?
   "Is inside-interval fully inside of outside-interval?"
   [outside-interval inside-interval]
-  (let [start (start inside-interval)
-        end (end inside-interval)]
-    (and (within? outside-interval start)
-         (within? outside-interval end))))
+  (let [start (clj-time/start inside-interval)
+        end (clj-time/end inside-interval)]
+    (and (clj-time/within? outside-interval start)
+         (clj-time/within? outside-interval end))))
 
 (defn time-interval-within-interval
   "Given an interval slightly greater than 24 h and a relative time,
   will give the first absolute date with the relative time within
   that interval."
   [interval time-string]
-  (let [interval-1 (intervalize (start interval) time-string)
-        interval-2 (intervalize (end interval) time-string)]
+  (let [interval-1 (intervalize (clj-time/start interval) time-string)
+        interval-2 (intervalize (clj-time/end interval) time-string)]
     (cond (within-interval? interval interval-1) interval-1
           (within-interval? interval interval-2) interval-2
           :else nil)))
@@ -279,16 +279,10 @@
            last-entry (file-line-around file (dec (.length file)))
            log-start (get-date first-entry)
            log-end (get-date last-entry)
-           log-interval (interval log-start log-end)
+           log-interval (clj-time/interval log-start log-end)
            start-interval (time-interval-within-interval log-interval start-time)
            end-interval (time-interval-within-interval log-interval end-time)
-           target-interval (interval (start start-interval) (end end-interval))
-           lines (find-lines file target-interval)]
-       (doseq [line lines]
-         (println line)
-         (println "-----")))))
+           target-interval (clj-time/interval (clj-time/start start-interval) (clj-time/end end-interval))]
+       (find-lines file target-interval)
 
-(defn -main
-  ([filename start-time] (-main filename start-time start-time))
-  ([filename start-time end-time]
-   (time (process-file filename start-time end-time))))
+       )))
