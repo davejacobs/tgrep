@@ -51,3 +51,13 @@ script, I've included an "Elapsed time" tag after the script runs.
 
 For an evenly distributed ~4 GB file, on a MacBook Air, this code takes
 about 150 ms to find 60 lines.
+
+### TODO ###
+
+- Move time-related queries into a time namespace.
+- Port to Node/ClojureScript to eliminate startup time.
+- Transform into commandline utility that doesn't use leiningen.
+- Make searching as lazy as possible.
+- Allow for more flexible inputs.
+- Allow for configurable time search formats.
+- Don't assume non-repeated times.
